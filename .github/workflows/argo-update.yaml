@@ -1,0 +1,62 @@
+name: Argo update
+
+on:
+  workflow_call:
+    inputs:
+      application-set:
+        description: 'Application set to update'
+        type: string
+        required: true
+      application-name:
+        description: 'Application name to update, overrides applicationset'
+        type: string
+        required: false
+      branch:
+        description: 'Branch to update'
+        type: string
+        default: 'develop'
+      yaml-selector:
+        description: 'YAML selector to update the image tag'
+        type: string
+        default: '.image.tag'
+
+permissions:
+  contents: read
+
+jobs:
+  argo-update:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - name: Set GitHub slug environment variables
+        uses: rlespinasse/github-slug-action@v5
+      - name: Install Dasel
+        run: |
+          wget https://github.com/TomWright/dasel/releases/download/v2.8.1/dasel_linux_amd64 -O /usr/local/bin/dasel
+          chmod +x /usr/local/bin/dasel
+      - name: Setup SSH Agent
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.ARGOCD_DEPLOY_KEY }}
+      - name: Update ArgoCD application repo
+        run: |
+          git config --global user.email "infrastructure+github-actions@essential.gg"
+          git config --global user.name "Essential Github Actions"
+          git clone git@github.com:EssentialGG/argocd-applications.git -b ${{ inputs.branch }} --depth 1
+          cd argocd-applications
+          if [ -n "${{ inputs.application-name }}" ]; then
+            export VALUES_FILE="$APPLICATION_SET/values.$APPLICATION.yaml"
+            export GIT_COMMIT_MESSAGE="$APPLICATION_SET: update image tag (override: $APPLICATION)"
+          else
+            export VALUES_FILE="$APPLICATION_SET/values.yaml"
+            export GIT_COMMIT_MESSAGE="$APPLICATION_SET: update image tag"
+            rm -rf "$APPLICATION_SET" || true
+          fi
+          mkdir -p $APPLICATION_SET || true
+          touch $VALUES_FILE
+          dasel put -t string -v "${GITHUB_REF_SLUG}-gh${GITHUB_RUN_ID}" -r yaml -f $VALUES_FILE "${{ inputs.yaml-selector }}"
+          git add .
+          git commit -m "$GIT_COMMIT_MESSAGE"
+          git pull --rebase && git push
+        env:
+          APPLICATION_SET: ${{ inputs.application-set }}
+          APPLICATION: ${{ inputs.application-name }}
