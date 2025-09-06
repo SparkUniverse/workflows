@@ -56,7 +56,7 @@ jobs:
           dasel put -t string -v "${GITHUB_REF_SLUG}-gh${GITHUB_RUN_ID}" -r yaml -f $VALUES_FILE "${{ inputs.yaml-selector }}"
           git add .
           git commit -m "$GIT_COMMIT_MESSAGE"
-          git pull --rebase && git push
+          parallel --retries 10 --delay 3 ::: "git pull --rebase && git push"
         env:
           APPLICATION_SET: ${{ inputs.application-set }}
           APPLICATION: ${{ inputs.application-name }}
