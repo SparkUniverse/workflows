@@ -42,7 +42,7 @@ jobs:
         run: |
           git config --global user.email "infrastructure+github-actions@essential.gg"
           git config --global user.name "Essential Github Actions"
-          git clone git@github.com:EssentialGG/argocd-applications.git -b ${{ inputs.branch }} --depth 1
+          git clone git@github.com:SparkUniverse/argocd-applications.git -b ${{ inputs.branch }} --depth 1
           cd argocd-applications
           if [ -n "${{ inputs.application-name }}" ]; then
             export VALUES_FILE="$APPLICATION_SET/values.$APPLICATION.yaml"
