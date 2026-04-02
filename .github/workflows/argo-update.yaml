@@ -19,6 +19,10 @@ on:
         description: 'YAML selector to update the image tag'
         type: string
         default: '.image.tag'
+      environment-name:
+        description: 'The name of the environment that this workflow call is deploying to'
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -27,6 +31,8 @@ jobs:
   argo-update:
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
+    environment:
+      name: ${{ inputs.environment-name }}
     steps:
       - name: Set GitHub slug environment variables
         uses: rlespinasse/github-slug-action@v5
