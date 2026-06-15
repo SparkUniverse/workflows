@@ -2,8 +2,8 @@ name: Authenticate via GitHub app
 description: Generates a GitHub App installation token, and configures the Git author and GitHub CLI
 
 inputs:
-  app-id:
-    description: The ID of the GitHub app
+  client-id:
+    description: The client ID of the GitHub app
     required: true
   private-key:
     description: The private key of the GitHub app
@@ -24,7 +24,7 @@ runs:
       uses: actions/create-github-app-token@v3
       id: github-app-token
       with:
-        app-id: ${{ inputs.app-id }}
+        client-id: ${{ inputs.client-id }}
         private-key: ${{ inputs.private-key }}
         permission-contents: write
 
