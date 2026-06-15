@@ -1,27 +1,27 @@
 name: Authenticate via GitHub app
+description: Generates a GitHub App installation token, and configures the Git author and GitHub CLI
 
-on:
-  workflow_call:
-    inputs:
-      app-id:
-        type: string
-        description: The ID of the GitHub app
-        required: true
-      private-key:
-        type: string
-        description: The private key of the GitHub app
-        required: true
+inputs:
+  app-id:
+    type: string
+    description: The ID of the GitHub app
+    required: true
+  private-key:
+    type: string
+    description: The private key of the GitHub app
+    required: true
 
-    outputs:
-      github-app-user-id:
-        value: ${{ steps.github-app-user-id.outputs.user-id }}
-        description: The ID of the user that the token is authenticated as
-      github-token:
-        value: ${{ steps.github-app-token.outputs.token }}
-        description: The access token generated for the GitHub app
+outputs:
+  app-user-id:
+    value: ${{ steps.github-app-user-id.outputs.user-id }}
+    description: The ID of the user that the token is authenticated as
+  token:
+    value: ${{ steps.github-app-token.outputs.token }}
+    description: The access token generated for the GitHub app
 
-jobs:
-  authenticate-via-github-app:
+runs:
+  using: composite
+  steps:
     name: Authenticate via GitHub app
     runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     steps:
