@@ -1,0 +1,29 @@
+name: Sync Linear Release
+
+on:
+  workflow_call:
+    inputs:
+      environment-name:
+        type: string
+        description: "The name of the environment to release to (production or development)"
+        required: true
+      release-access-key:
+        type: string
+        description: Linear pipeline access key for authentication
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  sync-linear-release:
+    runs-on: blacksmith-2vcpu-ubuntu-2404-arm
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # Required for commit history
+
+      - uses: linear/linear-release-action@3b634623620454bac33390451a1dd15ba78e3dc4 # 0.14.4
+        with:
+          access_key: ${{ inputs.release-access-key }}
+          command: ${{ inputs.environment-name == 'production' && 'complete' || 'sync' }}
