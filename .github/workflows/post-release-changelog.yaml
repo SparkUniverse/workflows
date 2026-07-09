@@ -105,10 +105,13 @@ jobs:
           fi
 
           if [[ -n "$notes" ]]; then
-            # Convert Linear's markdown to Slack mrkdwn: escape Slack's control
-            # characters, then rewrite links ("[text](<url>)" and
-            # "[text](url)"), headings, bullets, and bold.
+            # Convert Linear's markdown to Slack mrkdwn: strip markdown escape
+            # backslashes (Linear escapes bracket/paren/star characters that
+            # were typed as plain text rather than rich-text marks), escape
+            # Slack's control characters, then rewrite links ("[text](<url>)"
+            # and "[text](url)"), headings, bullets, and bold.
             body="$(sed -E \
+              -e 's/\\([][()*_#`~\\])/\1/g' \
               -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' \
               -e 's/\[([^]]+)\]\(&lt;([^)]+)&gt;\)/<\2|\1>/g' \
               -e 's/\[([^]]+)\]\(([^)]+)\)/<\2|\1>/g' \
