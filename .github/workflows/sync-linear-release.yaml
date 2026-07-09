@@ -38,18 +38,32 @@ jobs:
   sync-linear-release:
     runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     outputs:
-      release-id: ${{ steps.linear-release.outputs.release-id }}
-      release-name: ${{ steps.linear-release.outputs.release-name }}
-      release-version: ${{ steps.linear-release.outputs.release-version }}
-      release-url: ${{ steps.linear-release.outputs.release-url }}
+      release-id: ${{ steps.linear-complete.outputs.release-id || steps.linear-sync.outputs.release-id }}
+      release-name: ${{ steps.linear-complete.outputs.release-name || steps.linear-sync.outputs.release-name }}
+      release-version: ${{ steps.linear-complete.outputs.release-version || steps.linear-sync.outputs.release-version }}
+      release-url: ${{ steps.linear-complete.outputs.release-url || steps.linear-sync.outputs.release-url }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # Required for commit history
 
+      # Development deploys accumulate issues in the currently started release
+      # without stamping a version: only `sync` can set a release's version,
+      # and once the started release carries one, a later sync with a different
+      # version spawns a fresh release instead of targeting it. The version is
+      # therefore only applied on production, immediately before `complete`
+      # looks the release up by that exact version.
       - uses: linear/linear-release-action@3b634623620454bac33390451a1dd15ba78e3dc4 # 0.14.4
-        id: linear-release
+        id: linear-sync
         with:
           access_key: ${{ secrets.LINEAR_RELEASE_ACCESS_KEY }}
-          command: ${{ inputs.environment-name == 'production' && 'complete' || 'sync' }}
+          command: sync
+          version: ${{ inputs.environment-name == 'production' && inputs.release-version || '' }}
+
+      - uses: linear/linear-release-action@3b634623620454bac33390451a1dd15ba78e3dc4 # 0.14.4
+        id: linear-complete
+        if: inputs.environment-name == 'production'
+        with:
+          access_key: ${{ secrets.LINEAR_RELEASE_ACCESS_KEY }}
+          command: complete
           version: ${{ inputs.release-version }}
