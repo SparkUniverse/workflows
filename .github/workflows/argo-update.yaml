@@ -4,23 +4,27 @@ on:
   workflow_call:
     inputs:
       application-set:
-        description: 'Application set to update'
+        description: "Application set to update"
         type: string
         required: true
       application-name:
-        description: 'Application name to update, overrides applicationset'
+        description: "Application name to update, overrides applicationset"
         type: string
         required: false
       branch:
-        description: 'Branch to update'
+        description: "Branch to update"
         type: string
-        default: 'develop'
+        default: "develop"
       yaml-selector:
-        description: 'YAML selector to update the image tag'
+        description: "YAML selector to update the image tag"
         type: string
-        default: '.image.tag'
+        default: ".image.tag"
+      image-tag:
+        description: "Explicit image tag to deploy; defaults to the caller's ref slug and run ID"
+        type: string
+        required: false
       environment-name:
-        description: 'The name of the environment that this workflow call is deploying to'
+        description: "The name of the environment that this workflow call is deploying to"
         type: string
         required: false
 
@@ -60,10 +64,11 @@ jobs:
           fi
           mkdir -p $APPLICATION_SET || true
           touch $VALUES_FILE
-          dasel put -t string -v "${GITHUB_REF_SLUG}-gh${GITHUB_RUN_ID}" -r yaml -f $VALUES_FILE "${{ inputs.yaml-selector }}"
+          dasel put -t string -v "${IMAGE_TAG:-${GITHUB_REF_SLUG}-gh${GITHUB_RUN_ID}}" -r yaml -f $VALUES_FILE "${{ inputs.yaml-selector }}"
           git add .
           git commit -m "$GIT_COMMIT_MESSAGE"
           parallel --retries 10 --delay 3 ::: "git pull --rebase && git push"
         env:
           APPLICATION_SET: ${{ inputs.application-set }}
           APPLICATION: ${{ inputs.application-name }}
+          IMAGE_TAG: ${{ inputs.image-tag }}
