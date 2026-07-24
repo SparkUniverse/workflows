@@ -28,10 +28,10 @@ on:
         type: string
         required: false
 
-    secrets:
-      ARGOCD_DEPLOY_KEY:
-        description: SSH private key with write access to the ArgoCD applications repo
-        required: true
+    # secrets:
+    #   ARGOCD_DEPLOY_KEY:
+    #     description: SSH private key with write access to the ArgoCD applications repo
+    #     required: true
 
 permissions:
   contents: read
