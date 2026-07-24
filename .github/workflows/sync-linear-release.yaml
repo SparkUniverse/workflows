@@ -37,6 +37,7 @@ permissions:
 jobs:
   sync-linear-release:
     runs-on: namespace-profile-tiny-arm64
+    timeout-minutes: 5
     outputs:
       release-id: ${{ steps.linear-complete.outputs.release-id || steps.linear-sync.outputs.release-id }}
       release-name: ${{ steps.linear-complete.outputs.release-name || steps.linear-sync.outputs.release-name }}
