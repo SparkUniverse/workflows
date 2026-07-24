@@ -50,9 +50,9 @@ jobs:
           ssh-private-key: ${{ secrets.ARGOCD_DEPLOY_KEY }}
       - name: Update ArgoCD application repo
         run: |
-          git config --global user.email "infrastructure+github-actions@essential.gg"
-          git config --global user.name "Essential Github Actions"
-          git clone git@github.com:SparkUniverse/argocd-applications.git -b ${{ inputs.branch }} --depth 1
+          git config --global user.email "infrastructure@sparkuniverse.com"
+          git config --global user.name "Spark Universe Infrastructure"
+          git clone git@github.com:${{ github.repository_owner }}/argocd-applications.git -b ${{ inputs.branch }} --depth 1
           cd argocd-applications
           if [ -n "${{ inputs.application-name }}" ]; then
             export VALUES_FILE="$APPLICATION_SET/values.$APPLICATION.yaml"
