@@ -38,7 +38,7 @@ permissions:
 
 jobs:
   argo-update:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: namespace-profile-tiny-arm64
     timeout-minutes: 5
     environment:
       name: ${{ inputs.environment-name }}
@@ -47,7 +47,7 @@ jobs:
         uses: rlespinasse/github-slug-action@ef93b2ea4b6405d06fd8684fc3ff795d262ecae8 # v5.7.0
       - name: Install Dasel
         run: |
-          wget https://github.com/TomWright/dasel/releases/download/v2.8.1/dasel_linux_amd64 -O /usr/local/bin/dasel
+          wget https://github.com/TomWright/dasel/releases/download/v2.8.1/dasel_linux_arm64 -O /usr/local/bin/dasel
           chmod +x /usr/local/bin/dasel
       - name: Setup SSH Agent
         uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0

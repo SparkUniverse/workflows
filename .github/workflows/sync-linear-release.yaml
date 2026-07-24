@@ -36,7 +36,7 @@ permissions:
 
 jobs:
   sync-linear-release:
-    runs-on: blacksmith-2vcpu-ubuntu-2404-arm
+    runs-on: namespace-profile-tiny-arm64
     outputs:
       release-id: ${{ steps.linear-complete.outputs.release-id || steps.linear-sync.outputs.release-id }}
       release-name: ${{ steps.linear-complete.outputs.release-name || steps.linear-sync.outputs.release-name }}

@@ -36,7 +36,7 @@ permissions: {}
 
 jobs:
   post-release-changelog:
-    runs-on: blacksmith-2vcpu-ubuntu-2404-arm
+    runs-on: namespace-profile-tiny-arm64
     timeout-minutes: 10
     steps:
       - name: Fetch release notes and post to Slack
