@@ -39,13 +39,13 @@ jobs:
       name: ${{ inputs.environment-name }}
     steps:
       - name: Set GitHub slug environment variables
-        uses: rlespinasse/github-slug-action@v5
+        uses: rlespinasse/github-slug-action@ef93b2ea4b6405d06fd8684fc3ff795d262ecae8 # v5.7.0
       - name: Install Dasel
         run: |
           wget https://github.com/TomWright/dasel/releases/download/v2.8.1/dasel_linux_amd64 -O /usr/local/bin/dasel
           chmod +x /usr/local/bin/dasel
       - name: Setup SSH Agent
-        uses: webfactory/ssh-agent@v0.9.1
+        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
         with:
           ssh-private-key: ${{ secrets.ARGOCD_DEPLOY_KEY }}
       - name: Update ArgoCD application repo

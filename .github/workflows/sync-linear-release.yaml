@@ -43,7 +43,7 @@ jobs:
       release-version: ${{ steps.linear-complete.outputs.release-version || steps.linear-sync.outputs.release-version }}
       release-url: ${{ steps.linear-complete.outputs.release-url || steps.linear-sync.outputs.release-url }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # Required for commit history
 
@@ -53,14 +53,14 @@ jobs:
       # version spawns a fresh release instead of targeting it. The version is
       # therefore only applied on production, immediately before `complete`
       # looks the release up by that exact version.
-      - uses: linear/linear-release-action@3b634623620454bac33390451a1dd15ba78e3dc4 # 0.14.4
+      - uses: linear/linear-release-action@c0cb8354a362c24c6d3e0948f37fd66d07588e3f # v0.14.5
         id: linear-sync
         with:
           access_key: ${{ secrets.LINEAR_RELEASE_ACCESS_KEY }}
           command: sync
           version: ${{ inputs.environment-name == 'production' && inputs.release-version || '' }}
 
-      - uses: linear/linear-release-action@3b634623620454bac33390451a1dd15ba78e3dc4 # 0.14.4
+      - uses: linear/linear-release-action@c0cb8354a362c24c6d3e0948f37fd66d07588e3f # v0.14.5
         id: linear-complete
         if: inputs.environment-name == 'production'
         with:
