@@ -1,0 +1,111 @@
+name: Deploy command
+
+# Deploys a pull request onto the dev cluster in response to a `/deploy` comment. The `repository_dispatch` trigger
+# that a slash command produces only reaches workflows in the repository it was sent to, so each repository keeps a
+# trigger that calls this workflow with the details of the pull request.
+
+on:
+  workflow_call:
+    inputs:
+      application-set:
+        description: "Application set to deploy"
+        type: string
+        required: true
+      applications:
+        description: "Space separated applications to deploy, e.g. `admin-panel partner-panel`. Empty deploys the whole set"
+        type: string
+        default: ""
+      yaml-selector:
+        description: "YAML selector to update the image tag"
+        type: string
+        default: ".image.tag"
+      build-workflow:
+        description: "Workflow file that builds and pushes the images"
+        type: string
+        default: "ci.yaml"
+      branch:
+        description: "Branch to deploy the newest successful build of"
+        type: string
+        required: true
+      issue-number:
+        description: "Pull request to comment on"
+        type: number
+        required: true
+      head-sha:
+        description: "Commit at the head of the pull request, used to flag a deploy that lags behind it"
+        type: string
+        default: ""
+    secrets:
+      # Both optional so that callers can pass them with `secrets: inherit`.
+      ARGOCD_DEPLOY_KEY:
+        description: SSH private key with write access to the ArgoCD applications repo
+        required: false
+      CMD_DISPATCH_GH_TOKEN:
+        description: Token the pull request comment is posted with
+        required: false
+
+jobs:
+  prepare:
+    runs-on: namespace-profile-tiny-arm64
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    steps:
+      - name: Generate applications matrix
+        id: data
+        env:
+          APPS: ${{ inputs.applications }}
+        run: |
+          echo "matrix=$(jq -cn --arg apps "$APPS" '{application: ($apps | split(" ") | if length == 0 then [""] else . end)}')" >> "$GITHUB_OUTPUT"
+      # Deploy the images the branch was already built into rather than building them a second time. Builds tag every
+      # image `gh<run id>`, the one tag that no later run can overwrite, so the newest successful run identifies them.
+      - name: Resolve build
+        id: build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          WORKFLOW: ${{ inputs.build-workflow }}
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          run=$(gh api "repos/$REPO/actions/workflows/$WORKFLOW/runs?branch=$BRANCH&status=success&per_page=1")
+          run_id=$(jq -r '.workflow_runs[0].id // empty' <<< "$run")
+          if [ -z "$run_id" ]; then
+            echo "No successful $WORKFLOW run found on branch $BRANCH" >&2
+            exit 1
+          fi
+          {
+            echo "image-tag=gh$run_id"
+            echo "sha=$(jq -r '.workflow_runs[0].head_sha' <<< "$run")"
+            echo "run-url=$(jq -r '.workflow_runs[0].html_url' <<< "$run")"
+          } >> "$GITHUB_OUTPUT"
+    outputs:
+      matrix: ${{ steps.data.outputs.matrix }}
+      image-tag: ${{ steps.build.outputs.image-tag }}
+      sha: ${{ steps.build.outputs.sha }}
+      run-url: ${{ steps.build.outputs.run-url }}
+  argo-update:
+    needs: [prepare]
+    strategy:
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    # Referenced by its full name rather than `./` so that it resolves the same way for every caller.
+    uses: SparkUniverse/workflows/.github/workflows/argo-update.yaml@main
+    secrets:
+      ARGOCD_DEPLOY_KEY: ${{ secrets.ARGOCD_DEPLOY_KEY }}
+    with:
+      application-set: ${{ inputs.application-set }}
+      application-name: ${{ matrix.application }}
+      yaml-selector: ${{ inputs.yaml-selector }}
+      image-tag: ${{ needs.prepare.outputs.image-tag }}
+  comment:
+    runs-on: namespace-profile-tiny-arm64
+    timeout-minutes: 5
+    needs: [prepare, argo-update]
+    steps:
+      - name: Post comment
+        uses: peter-evans/create-or-update-comment@71345be0265236311c031f5c7866368bd1eff043 # v4.0.0
+        with:
+          token: ${{ secrets.CMD_DISPATCH_GH_TOKEN }}
+          issue-number: ${{ inputs.issue-number }}
+          body: |
+            :tada: Deployed `${{ inputs.applications != '' && inputs.applications || inputs.application-set }}` (commit `${{ needs.prepare.outputs.sha }}`, [build](${{ needs.prepare.outputs.run-url }})) onto the dev cluster.
+            ${{ inputs.head-sha != '' && needs.prepare.outputs.sha != inputs.head-sha && ':warning: That is the newest commit with a successful build, not the head of this pull request.' || '' }}
