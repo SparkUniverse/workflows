@@ -51,6 +51,14 @@ jobs:
     permissions:
       actions: read
     steps:
+      - name: Validate branch name
+        env:
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          if ! printf '%s' "$BRANCH" | grep -qE '^[A-Za-z0-9._/-]+$'; then
+            echo "Refusing to deploy branch with unsupported characters in its name." >&2
+            exit 1
+          fi
       - name: Generate applications matrix
         id: data
         env:
