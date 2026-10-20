@@ -27,10 +27,33 @@ on:
         description: "The name of the environment that this workflow call is deploying to"
         type: string
         required: false
+      pin:
+        description: "Pin the application set to this source branch; updates from any other source skip it until the pin is released"
+        type: string
+        default: ""
+      force:
+        description: "Deploy even if the application set is pinned to another source branch, taking over or clearing the pin"
+        type: boolean
+        default: false
+      release-pin:
+        description: "Release the pin held by this source branch without deploying; does nothing if another branch holds the pin"
+        type: string
+        default: ""
+      require-pin:
+        description: "Only deploy if the application set is already pinned to `pin`, e.g. to follow new commits on a pinned branch"
+        type: boolean
+        default: false
     secrets:
       ARGOCD_DEPLOY_KEY:
         description: SSH private key with write access to the ArgoCD applications repo
         required: false # secrets inherit compatibility
+    outputs:
+      deployed:
+        description: "`true` if the image tag was updated, otherwise the update was skipped because of a pin"
+        value: ${{ jobs.argo-update.outputs.deployed }}
+      pinned-to:
+        description: "Source branch that held the pin before this update, empty if none"
+        value: ${{ jobs.argo-update.outputs.pinned-to }}
 
 permissions:
   contents: read
@@ -41,6 +64,9 @@ jobs:
     timeout-minutes: 5
     environment:
       name: ${{ inputs.environment-name }}
+    outputs:
+      deployed: ${{ steps.update.outputs.deployed }}
+      pinned-to: ${{ steps.update.outputs.pinned-to }}
     steps:
       - name: Set GitHub slug environment variables
         uses: rlespinasse/github-slug-action@ef93b2ea4b6405d06fd8684fc3ff795d262ecae8 # v5.7.0
@@ -53,11 +79,35 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.ARGOCD_DEPLOY_KEY }}
       - name: Update ArgoCD application repo
+        id: update
         run: |
           git config --global user.email "infrastructure@sparkuniverse.com"
           git config --global user.name "Spark Universe Infrastructure"
           git clone git@github.com:${{ github.repository_owner }}/argocd-applications.git -b "$BRANCH" --depth 1
           cd argocd-applications
+          # Argo only reads the values files, so the pin can live next to them.
+          PIN_FILE="$APPLICATION_SET/.pin"
+          CURRENT_PIN=$(cat "$PIN_FILE" 2>/dev/null || true)
+          echo "pinned-to=$CURRENT_PIN" >> "$GITHUB_OUTPUT"
+          if [ "$REQUIRE_PIN" = "true" ] && [ "$CURRENT_PIN" != "$PIN" ]; then
+            echo "::notice::$APPLICATION_SET is not pinned to $PIN, skipping"
+            exit 0
+          fi
+          if [ -n "$RELEASE_PIN" ]; then
+            if [ "$CURRENT_PIN" != "$RELEASE_PIN" ]; then
+              echo "::notice::$APPLICATION_SET is not pinned to $RELEASE_PIN, leaving it alone"
+              exit 0
+            fi
+            git rm -q "$PIN_FILE"
+            git commit -m "$APPLICATION_SET: release pin held by $RELEASE_PIN"
+            parallel --retries 10 --delay 3 ::: "git pull --rebase && git push"
+            exit 0
+          fi
+          if [ -n "$CURRENT_PIN" ] && [ "$CURRENT_PIN" != "$PIN" ] && [ "$FORCE" != "true" ]; then
+            echo "::notice::$APPLICATION_SET is pinned to $CURRENT_PIN, skipping"
+            exit 0
+          fi
+          rm -f "$PIN_FILE"
           if [ -n "$APPLICATION" ]; then
             export VALUES_FILE="$APPLICATION_SET/values.$APPLICATION.yaml"
             export GIT_COMMIT_MESSAGE="$APPLICATION_SET: update image tag (override: $APPLICATION)"
@@ -69,12 +119,20 @@ jobs:
           mkdir -p $APPLICATION_SET || true
           touch $VALUES_FILE
           dasel put -t string -v "${IMAGE_TAG:-${GITHUB_REF_SLUG}-gh${GITHUB_RUN_ID}}" -r yaml -f $VALUES_FILE "$YAML_SELECTOR"
+          if [ -n "$PIN" ]; then
+            echo "$PIN" > "$PIN_FILE"
+          fi
           git add .
           git commit -m "$GIT_COMMIT_MESSAGE"
           parallel --retries 10 --delay 3 ::: "git pull --rebase && git push"
+          echo "deployed=true" >> "$GITHUB_OUTPUT"
         env:
           APPLICATION_SET: ${{ inputs.application-set }}
           APPLICATION: ${{ inputs.application-name }}
           IMAGE_TAG: ${{ inputs.image-tag }}
           BRANCH: ${{ inputs.branch }}
           YAML_SELECTOR: ${{ inputs.yaml-selector }}
+          PIN: ${{ inputs.pin }}
+          FORCE: ${{ inputs.force }}
+          RELEASE_PIN: ${{ inputs.release-pin }}
+          REQUIRE_PIN: ${{ inputs.require-pin }}

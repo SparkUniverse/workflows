@@ -12,9 +12,13 @@ on:
         type: string
         required: true
       applications:
-        description: "Space separated applications to deploy, e.g. `admin-panel partner-panel`. Empty deploys the whole set"
+        description: "Space separated applications to deploy, e.g. `admin-panel partner-panel`. Empty deploys the whole set. `--force` deploys over another branch's pin"
         type: string
         default: ""
+      pin:
+        description: "Pin the application set to the deployed branch, so deploys from other branches skip it until the pin is released or overridden with `--force`"
+        type: boolean
+        default: false
       yaml-selector:
         description: "YAML selector to update the image tag"
         type: string
@@ -64,7 +68,13 @@ jobs:
         env:
           APPS: ${{ inputs.applications }}
         run: |
-          echo "matrix=$(jq -cn --arg apps "$APPS" '{application: ($apps | split(" ") | if length == 0 then [""] else . end)}')" >> "$GITHUB_OUTPUT"
+          args=$(jq -cn --arg apps "$APPS" '$apps | split(" ")')
+          apps=$(jq -c 'map(select(. != "--force"))' <<< "$args")
+          {
+            echo "matrix=$(jq -c '{application: (if length == 0 then [""] else . end)}' <<< "$apps")"
+            echo "applications=$(jq -r 'join(" ")' <<< "$apps")"
+            echo "force=$(jq 'index("--force") != null' <<< "$args")"
+          } >> "$GITHUB_OUTPUT"
       # Deploy the images the branch was already built into rather than building them a second time. Builds tag every
       # image `gh<run id>`, the one tag that no later run can overwrite, so the newest successful run identifies them.
       - name: Resolve build
@@ -88,6 +98,8 @@ jobs:
           } >> "$GITHUB_OUTPUT"
     outputs:
       matrix: ${{ steps.data.outputs.matrix }}
+      applications: ${{ steps.data.outputs.applications }}
+      force: ${{ steps.data.outputs.force }}
       image-tag: ${{ steps.build.outputs.image-tag }}
       sha: ${{ steps.build.outputs.sha }}
       run-url: ${{ steps.build.outputs.run-url }}
@@ -104,16 +116,29 @@ jobs:
       application-name: ${{ matrix.application }}
       yaml-selector: ${{ inputs.yaml-selector }}
       image-tag: ${{ needs.prepare.outputs.image-tag }}
+      pin: ${{ inputs.pin && inputs.branch || '' }}
+      force: ${{ needs.prepare.outputs.force == 'true' }}
   comment:
     runs-on: namespace-profile-tiny-arm64
     timeout-minutes: 5
     needs: [prepare, argo-update]
     steps:
-      - name: Post comment
+      - name: Post deployed comment
+        if: ${{ needs.argo-update.outputs.deployed == 'true' }}
         uses: peter-evans/create-or-update-comment@71345be0265236311c031f5c7866368bd1eff043 # v4.0.0
         with:
           token: ${{ secrets.CMD_DISPATCH_GH_TOKEN }}
           issue-number: ${{ inputs.issue-number }}
           body: |
-            :tada: Deployed `${{ inputs.applications != '' && inputs.applications || inputs.application-set }}` (commit `${{ needs.prepare.outputs.sha }}`, [build](${{ needs.prepare.outputs.run-url }})) onto the dev cluster.
+            :tada: Deployed `${{ needs.prepare.outputs.applications != '' && needs.prepare.outputs.applications || inputs.application-set }}` (commit `${{ needs.prepare.outputs.sha }}`, [build](${{ needs.prepare.outputs.run-url }})) onto the dev cluster.
             ${{ inputs.head-sha != '' && needs.prepare.outputs.sha != inputs.head-sha && ':warning: That is the newest commit with a successful build, not the head of this pull request.' || '' }}
+            ${{ inputs.pin && format(':pushpin: `{0}` is pinned to `{1}`, other deploys of it are skipped until the pin is released.', inputs.application-set, inputs.branch) || '' }}
+            ${{ needs.argo-update.outputs.pinned-to != '' && needs.argo-update.outputs.pinned-to != inputs.branch && format(':warning: This took over the pin from `{0}`.', needs.argo-update.outputs.pinned-to) || '' }}
+      - name: Post pinned comment
+        if: ${{ needs.argo-update.outputs.deployed != 'true' }}
+        uses: peter-evans/create-or-update-comment@71345be0265236311c031f5c7866368bd1eff043 # v4.0.0
+        with:
+          token: ${{ secrets.CMD_DISPATCH_GH_TOKEN }}
+          issue-number: ${{ inputs.issue-number }}
+          body: |
+            :lock: Not deployed, `${{ inputs.application-set }}` is pinned to `${{ needs.argo-update.outputs.pinned-to }}` on the dev cluster. Comment `/deploy --force` to take it over.
